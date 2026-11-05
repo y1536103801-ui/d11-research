@@ -26,6 +26,12 @@ def ident(url):
         return vs[0] if len(vs)==1 and re.fullmatch(r"[0-9]{6,24}", vs[0]) else None
     if host("tmall.com") and re.fullmatch(r"/(?:item\.htm|item\.html|item/detail\.htm)", u.path) and value("id"):
         return ("天猫",value("id"))
+    if ((h=="item.taobao.com" and u.path=="/item.htm") or (h=="m.intl.taobao.com" and u.path=="/detail/detail.html") or
+            (h in {"h5.m.taobao.com","item.m.taobao.com"} and u.path in {"/awp/core/detail.htm","/item.htm"})) and value("id"):
+        return ("淘宝",value("id"))
+    if h in {"item.jd.com","item.m.jd.com"}:
+        m=re.fullmatch(r"/(\d{6,24})\.html" if h=="item.jd.com" else r"/product/(\d{6,24})\.html",u.path)
+        if m:return ("京东",m[1])
     if any(host(d) for d in ("douyin.com","jinritemai.com","douyinec.com")):
         direct=re.fullmatch(r"/(?:mall/)?(?:goods|product)/(?:detail/)?(\d{6,24})/?",u.path)
         if direct:return ("抖音",direct[1])
@@ -35,13 +41,15 @@ def ident(url):
             if len(vals)==1 and None not in vals:return ("抖音",vals.pop())
     return None
 
-def request_guard(initial,short_url,stops):
+def request_guard(initial,short_url,stops,expected=None):
     def check(url):
         p=urlsplit(url);h=p.hostname or "";target=ident(url)
-        if target in stops:fail("access_not_permitted","此商品入口已记录宿主限制，未发送请求。")
+        if target in stops or (target and target[0] in {"天猫","淘宝"} and any(
+            (ch,target[1]) in stops for ch in ("天猫","淘宝"))):fail("access_not_permitted","此商品入口已记录宿主限制，未发送请求。")
         if short_url and url==short_url:return
-        if target and ((initial and target==initial) or (short_url and target[0]=="抖音")):return
-        if h in {"login.taobao.com","login.tmall.com","passport.douyin.com"}:
+        if target and ((initial and target==initial) or (expected and target==expected and initial==("淘宝",target[1]) and target[0]=="天猫") or
+                       (short_url and target[0]=="抖音")):return
+        if h in {"login.taobao.com","login.tmall.com","login.m.taobao.com","passport.jd.com","plogin.m.jd.com","passport.douyin.com"}:
             fail("login_redirect","公开商品页转向平台登录；未读取账号页。")
         fail("not_same_detail","跳转目标不是同一获准渠道商品详情，未发送请求。")
     return check
@@ -125,26 +133,37 @@ def collect(a):
         raise ValueError("款名须取自已认款标题，且能区分同品牌的其他洁面")
     u=public_url(a.url); initial=ident(u); bits=urlsplit(u)
     short=bits.hostname=="v.douyin.com" and re.fullmatch(r"/[A-Za-z0-9_-]+/?",bits.path)
-    if not initial and not short:raise ValueError("请提供天猫/抖音具体商品详情或抖音公开商品分享链接，搜索页、视频和品牌站不采为渠道样本")
+    if not initial and not short:raise ValueError("请提供本批次平台的商品详情；搜索结果、视频和品牌站不能用作渠道商品页")
+    platform=getattr(a,"platform",None) or (initial[0] if initial else "抖音")
+    if platform not in state["channels"]:raise ValueError("商品不在本批次的渠道范围内")
+    if platform!=(initial[0] if initial else "抖音") and not(initial and initial[0]=="淘宝" and platform=="天猫"):
+        raise ValueError("入口域名与待测平台不对应")
+    expected=(platform,initial[1]) if initial else None
     # Only for an explicitly permitted public product; never reuse an account session.
     dest=Path(a.out).absolute();dest.mkdir(parents=True,exist_ok=True)
     ts=dt.datetime.now(dt.timezone.utc);out=dest/("attempt-"+ts.strftime("%Y%m%dT%H%M%S%fZ"));out.mkdir()
     stopped=Path(a.run)/"受限商品.json"
     stops={tuple(x) for x in read(stopped)["items"]} if stopped.is_file() else set()
-    cap=capture_page(u,str(out),before_hop=request_guard(initial,u if short else None,stops))
+    cap=capture_page(u,str(out),before_hop=request_guard(initial,u if short else None,stops,expected))
     actual=ident(cap["url"]) if cap.get("url") else None
     result={"candidate_id":a.candidate,"expected_sku":c["sku"],"candidate_title":c["title"],"brand":c["brand"],"variant":a.variant,"year":state["year"],
+            "requested_platform":platform,"entry_url":u,"entry_id":initial[1] if initial else None,
             "at":cap.get("retrieved_at") or ts.isoformat(),"source":"public_detail_get","target":actual,"url":cap.get("url") if actual else None,
             "page_status":cap.get("status"),"receipt":Path(cap["receipt_path"]).name if cap.get("receipt_path") else None,"fields":{},"main_image":None,"missing":[]}
     pending=result["missing"]
-    if cap.get("status")!="ok" or cap.get("evidence_ok") is not True or not actual or (initial and actual!=initial):
+    if cap.get("status")!="ok" or cap.get("evidence_ok") is not True or not actual or (expected and actual!=expected):
         pending.append("未取得可读的同一渠道商品详情；不解析价格或图片")
     elif not all(packed(x) in packed(str(cap.get("product_name") or cap.get("title") or "")) for x in (c["brand"],a.variant)):
         pending.append("渠道商品标题未同时匹配认款品牌与款名")
     else:
         t=Path(cap["text_path"])
         if sha(t)!=cap["text_sha256"]:raise ValueError("页面正文校验值不一致")
-        body=t.read_text(encoding="utf-8").partition("\n\n")[2]; f=fields(body,c["sku"],state["year"],c["title"]);result["fields"]=f;result["title"]=cap.get("product_name") or cap["title"]
+        body=t.read_text(encoding="utf-8").partition("\n\n")[2]
+        if actual[0]=="淘宝" and (re.search(r"天猫(?:国际|店铺|旗舰店|专卖店|专营店)|店铺(?:类型|性质)\s*[:：]?\s*天猫",body) or
+                not re.search(r"(?:店铺(?:类型|性质)\s*[:：]?\s*(?:淘宝|个人|个体|企业)|(?:淘宝集市|淘宝个人|淘宝企业)店铺|淘宝店铺认证)",body)):
+            pending.append("淘宝域名也可展示天猫商品；本页未确认是独立淘宝店")
+            result["status"]="incomplete";write(out/"capture.json",result);return result,out/"capture.json"
+        f=fields(body,c["sku"],state["year"],c["title"]);result["fields"]=f;result["title"]=cap.get("product_name") or cap["title"]
         for k,label in (("selected","所选规格/件数"),("price","单一活动标价"),("campaign","有年份的本期活动标识"),("benefits","明确优惠或明确无优惠")):
             if not f[k]:pending.append(label)
         # The media is still a candidate until compared to the visible SKU hero.
@@ -237,6 +256,7 @@ def main():
     ap=argparse.ArgumentParser();sub=ap.add_subparsers(dest="cmd",required=True)
     p=sub.add_parser("collect")
     for k in ("run","candidate","url","variant","out"):p.add_argument("--"+k,required=True)
+    p.add_argument("--platform",choices=("天猫","淘宝","京东","抖音"),help="需实测的店型；淘宝承接的天猫候选关闭跨平台重复计数")
     p=sub.add_parser("compare")
     for k in ("capture","reference","out"):p.add_argument("--"+k,required=True)
     a=ap.parse_args();result,out=(collect if a.cmd=="collect" else compare)(a)

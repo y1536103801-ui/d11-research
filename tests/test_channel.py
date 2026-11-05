@@ -12,19 +12,23 @@ from PIL import Image, ImageDraw
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"skills/d11-research/scripts"))
 import capture
 import channel
+import catalogue
+import promo
 
 NAME="样例牌绿泥控油洁面膏"
 NORMAL="已选规格：绿泥 120g 单支\n2026年双十一\n活动标价：49元\n店铺券：满60减10\n加赠：旅行装一件"
 PIC="https://fixture.example.org/main.png"
 TM="https://detail.tmall.com/item.htm?id=100000000000"
 DY="https://haohuo.jinritemai.com/views/product/item2?id=100000000001"
+TB="https://item.taobao.com/item.htm?id=100000000002"
+JD="https://item.jd.com/100000000003.html"
 
 class TestChannel(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root=Path(tmp.name).resolve(); self.run_dir=self.root/"batch"
-        channel.write(self.run_dir/"state.json",{"year":2026,"candidates":{"fixture":{"brand":"样例牌","title":NAME,"sku":"120g 单支"}},"selections":["fixture"]})
+        channel.write(self.run_dir/"state.json",{"year":2026,"channels":["天猫","淘宝","京东","抖音"],"candidates":{"fixture":{"brand":"样例牌","title":NAME,"sku":"120g 单支"}},"selections":["fixture"]})
         im=Image.new("RGB",(700,700),"white"); d=ImageDraw.Draw(im)
         d.rounded_rectangle((265,120,435,575),radius=25,fill=(92,116,104));d.rectangle((280,330,420,385),fill=(210,230,190))
         buf=io.BytesIO();im.save(buf,format="PNG");self.picture=buf.getvalue()
@@ -57,10 +61,10 @@ class TestChannel(unittest.TestCase):
         if "at" not in overrides:r["at"]=c["at"];channel.write(ref,r)
         return channel.compare(NS(capture=path,reference=ref,out=self.root/"comparison.json"))[0]
 
-    def test_both_detail_formats_roundtrip(self):
-        for url in (TM,DY):
+    def test_platform_details_roundtrip(self):
+        for url in (TM,DY,TB,JD):
             with self.subTest(url=url):
-                c,path=self.collect(url)
+                c,path=self.collect(url,lines=NORMAL+"\n店铺类型：淘宝个人店铺" if url==TB else NORMAL)
                 self.assertEqual(c["status"],"awaiting_independent_page",c["missing"])
                 self.assertEqual([kind for kind,url_ in self.calls],["page","image"])
                 out=self.compare(c,path)
@@ -117,5 +121,40 @@ class TestChannel(unittest.TestCase):
         self.assertEqual(ex.exception.code,"access_not_permitted")
         with patch.object(capture,"get_hop",side_effect=AssertionError("transport must not be called")), self.assertRaises(capture.CaptureError):
             capture.fetch(TM,"page",before_hop=channel.request_guard(channel.ident(TM),None,{channel.ident(TM)}))
+
+    def test_taobao_alias_is_not_an_independent_store(self):
+        for header in ("店铺类型：天猫旗舰店",""):
+            c,p=self.collect(TB,lines=NORMAL+"\n"+header,expected_image=False)
+            self.assertEqual(c["status"],"incomplete");self.assertFalse(c["fields"])
+        with self.assertRaises(capture.CaptureError) as ex:
+            channel.request_guard(channel.ident(TB),None,{("天猫",channel.ident(TB)[1])})(TB)
+        self.assertEqual(ex.exception.code,"access_not_permitted")
+        self.assertIsNone(channel.ident("https://jd.com/100000000003.html"))
+        self.assertEqual(channel.ident("https://m.intl.taobao.com/detail/detail.html?id=100000000002"),channel.ident(TB))
+        mall=("天猫",channel.ident(TB)[1]);dest=TM.replace("100000000000",channel.ident(TB)[1])
+        channel.request_guard(channel.ident(TB),None,set(),mall)(dest)
+        with self.assertRaises(capture.CaptureError):channel.request_guard(channel.ident(TB),None,set(),mall)(TM)
+        with self.assertRaises(capture.CaptureError):channel.request_guard(channel.ident(TB),None,set())(dest)
+
+    def test_scope_is_used_by_collect_and_preserves_existing_batches(self):
+        r=self.run_dir/"state.json";st=channel.read(r);st["channels"]=["天猫","淘宝","京东"];channel.write(r,st)
+        with self.assertRaises(ValueError):self.collect(DY)
+        self.assertFalse(self.calls)
+        dest=self.root/"new"; args=lambda *a:promo.parser().parse_args(["--run",str(dest),*a])
+        self.assertEqual(promo.run(args("start","--pilot"))["channels"],st["channels"])
+        with self.assertRaises(promo.Invalid):promo.run(args("start","--pilot","--channels","抖音"))
+        old=channel.read(dest/"state.json");old.pop("channel_scope");old["channels"]=["天猫","抖音"];channel.write(dest/"state.json",old)
+        self.assertEqual(promo.run(args("status"))["channels"],["天猫","抖音"])
+
+    def test_catalogue_match_keeps_thumbnails_separate(self):
+        cc={"brand":"样例牌","title":NAME,"sku":"120g 单支"}
+        titles=["样例牌绿泥控油 红泥120g1支","样例牌绿泥120g*2","样例牌绿泥控油 120g绿泥1支",
+                "样例牌绿泥控油 绿泥洁面120g","样例牌绿泥 2瓶装 120g绿泥1支","样例牌绿泥120g+50g"]
+        html="".join(f'<a href="https://item.jd.com/10000000{i}.html" title="{t}"><img alt="{t}" data-lazy-img="//img30.360buyimg.com/n7/public.jpg"></a>' for i,t in enumerate(titles))
+        a=catalogue.Cards("https://www.jd.com/brand/1.html");a.feed(html+html)
+        rows,rejected=catalogue.select_cards(a.items,cc,"绿泥")
+        self.assertEqual([i["item_id"] for i in rows],["100000002","100000003"])
+        self.assertEqual([i["package_count_stated"] for i in rows],[True,False]);self.assertEqual(rejected,4)
+        self.assertFalse(any("price" in x or "main_image" in x for x in rows))
 
 if __name__=="__main__":unittest.main(verbosity=2)

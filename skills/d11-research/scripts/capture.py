@@ -107,6 +107,9 @@ def public_url(raw):
         if p.query:
             for pair in p.query.split("&"):
                 k, eq, v = pair.partition("=")
+                if (host=="s.taobao.com" and p.path=="/search" and eq and
+                    ((k=="q" and re.fullmatch(r"[\u3400-\u9fffA-Za-z0-9 +]{1,80}",unquote(v)) and re.search(r"[\u3400-\u9fff]",unquote(v)))
+                     or (k=="tab" and v=="mall"))):continue
                 if eq and _SELECTOR.fullmatch(k) and re.fullmatch(r"[A-Za-z0-9._~-]{1,96}", v):
                     continue
                 if eq and k.lower() == "x-oss-process" and _CDN.fullmatch(unquote(v)):

@@ -23,6 +23,7 @@ import warnings
 
 PRODUCTS = ["冰川保湿抗皱", "冰川露", "喷喷乳", "控油洁面"]
 CHANNELS = ["抖音", "天猫", "淘宝", "京东"]
+RETAIL = ["天猫", "淘宝", "京东"]
 BRANDS = ["欧莱雅", "海洋至尊", "碧欧泉", "百雀羚", "朗仕", "韩束", "理肤泉"]
 DOMAIN = {"抖音": ("douyin.com", "jinritemai.com", "douyinec.com"),
           "天猫": ("tmall.com", "tmall.hk"), "淘宝": ("taobao.com",),
@@ -191,8 +192,16 @@ def save_json(p, obj):
     atomic(p, (dump(obj, True) + "\n").encode())
 
 
-def scope_config(pilot):
-    return (["控油洁面"], ["天猫", "抖音"], ["欧莱雅"]) if pilot else (PRODUCTS[:], CHANNELS[:], BRANDS[:])
+def scope_config(pilot, channels=None):
+    # No scope marker in a saved r1 batch means the original fixed contract.
+    legacy = ["天猫","抖音"] if pilot else CHANNELS[:]
+    return (["控油洁面"] if pilot else PRODUCTS[:], legacy if channels is None else list(channels),
+            ["欧莱雅"] if pilot else BRANDS[:])
+
+def channel_set(channels):
+    require(isinstance(channels,list) and channels and all(c in CHANNELS for c in channels)
+            and len(channels)==len(set(channels)), "渠道范围必须为不重复的平台名称")
+    return [ch for ch in [*RETAIL,"抖音"] if ch in channels]
 
 
 @contextlib.contextmanager
@@ -217,7 +226,9 @@ def locked(root, create=False):
             s = read_json(st_path, 256 * 1024 * 1024)
             require(isinstance(s, dict) and s.get("schema_version") == STATE_VERSION and
                     s.get("mode") in ("pilot", "formal"), "不支持的批次状态文件")
-            cfg = scope_config(s["mode"] == "pilot")
+            scope=s.get("channel_scope")
+            require(scope is None or isinstance(scope,str),"渠道范围记录损坏")
+            cfg = scope_config(s["mode"] == "pilot",None if scope is None else channel_set(scope.split(",")))
             require(tuple(s.get(k) for k in ("products", "channels", "competitors")) == cfg, "批次范围与冻结接口不一致")
         else:
             require(create and all(p.name == lock.name for p in root.iterdir()), "首次 start 需要空目录")
@@ -777,8 +788,9 @@ def export_run(root, s):
 
 def guide():
     return {"run": {"start": "新建或续用同一模式的空/已初始化目录；--year 默认上海当前年，续跑沿用建档年",
-                    "formal": dict(zip(("products", "channels", "competitors"), scope_config(False))),
-                    "pilot": dict(zip(("products", "channels", "competitors"), scope_config(True)))},
+                    "formal": dict(zip(("products", "channels", "competitors"), scope_config(False,RETAIL))),
+                    "pilot": dict(zip(("products", "channels", "competitors"), scope_config(True,RETAIL))),
+                    "channels": "新批次默认天猫、淘宝、京东；start --channels 可选。旧批次沿用建档时的范围。"},
             "candidates": {"type": "对象列表", "required_strings": CAND_KEYS, "role": ["own", "competitor"],
                            "platform": "本批次渠道或品牌官网（官网亦可）；平台必须与来源域名相符",
                            "optional": {"image": "批次内本地图片路径；直接进入候选清单，不算正式原图"}},
@@ -836,6 +848,7 @@ def parser():
     a = cmds.add_parser("start", help="初始化或续跑（模式不可更改）")
     a.add_argument("--pilot", action="store_true")
     a.add_argument("--year", type=int)
+    a.add_argument("--channels",nargs="+",choices=CHANNELS,help="只在建批时设定；默认天猫、淘宝、京东")
     for name in ("candidates", "observe"):
         cmds.add_parser(name, help="导入 UTF-8 JSON 对象列表").add_argument("file", metavar="FILE")
     a = cmds.add_parser("select", help="明确试跑认款或用户确认")
@@ -866,12 +879,13 @@ def run(a):
             require(a.year is None or 2000 <= a.year <= 2099, "--year 应在 2000 至 2099")
             if s is not None:
                 require(s["mode"] == mode and (a.year is None or s["year"] == a.year), "同一目录不能切换试跑/正式或活动年，请新建并列批次目录")
+                if a.channels is not None:require(channel_set(a.channels)==channel_set(s["channels"]),"旧批次渠道不可覆盖；请新建并列批次")
                 verified_assets(root, s)
             else:
                 year = a.year or dt.datetime.now(CN).year
-                products, channels, brands = scope_config(a.pilot)
+                products, channels, brands = scope_config(a.pilot,channel_set(a.channels or RETAIL))
                 s = dict(schema_version=STATE_VERSION, mode=mode, year=year, campaign=f"{year}年双十一", created_at=now(),
-                         products=products, channels=channels, competitors=brands, candidates={}, selections={},
+                         products=products, channels=channels,channel_scope=",".join(channels), competitors=brands, candidates={}, selections={},
                          selection_history=[], observations={}, withdrawn={}, blobs={}, gaps=[])
                 save_json(root / STATE, s)
             return dict(run=str(root), **status(s))

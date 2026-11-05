@@ -6,10 +6,11 @@ case "${1:-}" in
   flow) script=promo.py;;
   capture) script=capture.py;;
   channel) script=channel.py;;
+  catalogue) script=catalogue.py;;
   evidence) script=read_evidence.py;;
   demo) script=demo.py;;
   doctor) script=;;
-  *) echo '用法：scripts/run {doctor|demo|flow|capture|channel|evidence} [参数]' >&2; exit 2;;
+  *) echo '用法：scripts/run {doctor|demo|flow|capture|catalogue|channel|evidence} [参数]' >&2; exit 2;;
 esac
 shift
 py=$(d11_python ready) || { echo '缺少运行环境，请在下载的仓库内运行 bash install-mac.command。' >&2; exit 3; }

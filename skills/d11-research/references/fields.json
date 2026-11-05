@@ -313,9 +313,9 @@
     "paths": "清单 FILE 相对命令工作目录；image/assets 及两类附件角色相对 --run 或用批次内绝对路径；禁跨批次、符号链接、..",
     "report_api": "同目录 report.py: write_report(path: pathlib.Path, data: dict)；entries.assets 为绝对本地路径",
     "run": {
+      "channels": "新批次默认天猫、淘宝、京东；start --channels 可选。旧批次沿用建档时的范围。",
       "formal": {
         "channels": [
-          "抖音",
           "天猫",
           "淘宝",
           "京东"
@@ -339,7 +339,8 @@
       "pilot": {
         "channels": [
           "天猫",
-          "抖音"
+          "淘宝",
+          "京东"
         ],
         "competitors": [
           "欧莱雅"

@@ -32,7 +32,7 @@ def parse(text):
 def main():
     a=argparse.ArgumentParser()
     subs=a.add_subparsers(required=True,dest="cmd")
-    q=subs.add_parser("find");q.add_argument("query");q.add_argument("--channels",nargs="+",choices=PLATFORMS,default=list(PLATFORMS))
+    q=subs.add_parser("find");q.add_argument("query");q.add_argument("--channels",nargs="+",choices=PLATFORMS,default=["天猫","淘宝","京东"])
     z=subs.add_parser("read");z.add_argument("file",type=Path);z.add_argument("--include-ocr",action="store_true")
     args=a.parse_args()
     if args.cmd=="find":o=[{"平台":p,"搜索词":args.query,"入口":PLATFORMS[p](args.query)} for p in args.channels]
