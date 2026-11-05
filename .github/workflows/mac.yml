@@ -1,0 +1,24 @@
+name: Mac deployment
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fresh-mac:
+    runs-on: macos-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install from scratch and check both client paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          export D11_DATA_DIR="$RUNNER_TEMP/d11-runtime"
+          bash install-mac.command --managed-python
+          py=$(cat "$D11_DATA_DIR/python-path")
+          "$py" -B tests/smoke_macos.py --installed-user
+          "$py" -B tests/test_channel.py

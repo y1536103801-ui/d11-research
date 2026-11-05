@@ -1,0 +1,23 @@
+# This project shares its own tools. Local research material is private by default.
+/*
+!/.gitignore
+!/.gitattributes
+!/README.md
+!/install.py
+!/install-mac.command
+!/docs/
+/docs/*
+!/docs/上手指南.md
+!/tests/
+!/skills/
+/skills/*
+!/skills/d11-research/
+!/.github/
+**/.DS_Store
+**/__pycache__/
+**/*.py[cod]
+**/.env*
+**/*.pem
+**/*.key
+**/.venv/
+**/runtime.json

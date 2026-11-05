@@ -1,0 +1,19 @@
+#!/bin/bash
+set -eu
+self_dir="$(cd "$(dirname "$0")" && pwd -P)"
+. "$self_dir/runtime.sh"
+case "${1:-}" in
+  flow) script=promo.py;;
+  capture) script=capture.py;;
+  channel) script=channel.py;;
+  evidence) script=read_evidence.py;;
+  demo) script=demo.py;;
+  doctor) script=;;
+  *) echo '用法：scripts/run {doctor|demo|flow|capture|channel|evidence} [参数]' >&2; exit 2;;
+esac
+shift
+py=$(d11_python ready) || { echo '缺少运行环境，请在下载的仓库内运行 bash install-mac.command。' >&2; exit 3; }
+if [ -z "$script" ]; then
+  exec "$py" -I -B -c 'import sys,PIL,docx; print("运行环境可用：Python",sys.version.split()[0],"· Pillow",PIL.__version__,"· python-docx",docx.__version__)'
+fi
+exec "$py" -E -s -B "$self_dir/$script" "$@"

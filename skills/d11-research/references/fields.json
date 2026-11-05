@@ -1,0 +1,356 @@
+{
+  "$defs": {
+    "candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "brand": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "image": {
+          "maxLength": 4096,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "platform": {
+          "enum": [
+            "抖音",
+            "天猫",
+            "淘宝",
+            "京东",
+            "品牌官网",
+            "官网",
+            "官方网站",
+            "品牌官方网站",
+            "抖音商城",
+            "京东商城"
+          ]
+        },
+        "product": {
+          "enum": [
+            "冰川保湿抗皱",
+            "冰川露",
+            "喷喷乳",
+            "控油洁面"
+          ]
+        },
+        "role": {
+          "enum": [
+            "own",
+            "competitor"
+          ]
+        },
+        "shop": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "sku": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "maxLength": 4096,
+          "pattern": "^https?://",
+          "type": "string"
+        }
+      },
+      "required": [
+        "product",
+        "role",
+        "brand",
+        "title",
+        "sku",
+        "url",
+        "platform",
+        "shop",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/candidate"
+      },
+      "type": "array"
+    },
+    "observation": {
+      "additionalProperties": false,
+      "properties": {
+        "assets": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "candidate_id": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "excerpt": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "fields": {
+          "additionalProperties": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "propertyNames": {
+            "maxLength": 80,
+            "pattern": "[㐀-鿿]",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "campaign",
+            "current",
+            "offer",
+            "rule"
+          ]
+        },
+        "observed_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}[Tt ]\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?([Zz]|[+-]\\d{2}:?\\d{2})$",
+          "type": "string"
+        },
+        "original": {
+          "type": "boolean"
+        },
+        "original_assets": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "platform": {
+          "enum": [
+            "抖音",
+            "天猫",
+            "淘宝",
+            "京东",
+            "品牌官网",
+            "官网",
+            "官方网站",
+            "品牌官方网站",
+            "抖音商城",
+            "京东商城"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "product_page",
+            "brand_page",
+            "rule_page",
+            "checkout",
+            "live"
+          ]
+        },
+        "screenshot_assets": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "shop": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "maxLength": 4096,
+          "pattern": "^https?://",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "platform",
+        "shop",
+        "kind",
+        "scope",
+        "observed_at",
+        "url",
+        "excerpt",
+        "assets",
+        "fields",
+        "original"
+      ],
+      "type": "object"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/observation"
+      },
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/candidates"
+    },
+    {
+      "$ref": "#/$defs/observations"
+    }
+  ],
+  "title": "双十一调研 CLI 输入清单",
+  "x-cli": {
+    "candidates": {
+      "optional": {
+        "image": "批次内本地图片路径；直接进入候选清单，不算正式原图"
+      },
+      "platform": "本批次渠道或品牌官网（官网亦可）；平台必须与来源域名相符",
+      "required_strings": [
+        "product",
+        "role",
+        "brand",
+        "title",
+        "sku",
+        "url",
+        "platform",
+        "shop",
+        "basis"
+      ],
+      "role": [
+        "own",
+        "competitor"
+      ],
+      "type": "对象列表"
+    },
+    "export": "JSON 回执含 export_dir/report；exports 下分试跑/正式快照，原图二级目录、候选清单.html、证据表.html/.json、待补.txt、报告输入.json、Word。相同状态/程序复用经校验快照",
+    "observe": {
+      "assets": "本批次本地文件路径列表；可为空，缺证据时仅留线索",
+      "fields": "JSON 对象；中文键、非空字符串值。条件、门槛、赠品等照录原文",
+      "image_gate": {
+        "both": "已认本品、本渠道商品页、观察年=批次年、页面规格=候选 sku、original=true、原图短边≥600px、独立截图",
+        "campaign": {
+          "图中文字": "逐字摘录原图上的双十一或 11.11 等标识",
+          "活动期": "来源明确的年份与双十一（如 2026年双十一）"
+        },
+        "current": {
+          "双十一字样": "无",
+          "版本依据": "例如：详情页标注当前在售包装 V2；无双十一字样或推测本身不足"
+        }
+      },
+      "kind": [
+        "campaign",
+        "current",
+        "offer",
+        "rule"
+      ],
+      "observed_at": "ISO 8601 日期时间，必须含时区",
+      "offer_gate": {
+        "all": "所选候选、本渠道商品/直播/结算页、页面规格=候选 sku、独立标注的截图",
+        "campaign": "活动价/福利另需活动期；宣传价和活动标价限 product_page/live",
+        "checkout": "结算实见价只允许 checkout，另需结算条件",
+        "daily": "日常价另需单独的同规格非促销日常价记录，限 product_page；划线价/吊牌价不算",
+        "prices": [
+          "日常价",
+          "活动标价",
+          "宣传到手价",
+          "结算实见价"
+        ],
+        "stacking": "一条只记一种价格；不推算叠券、跨店满减、会员到手价"
+      },
+      "optional": {
+        "original_assets": "assets 的图片子集；按字节区分原图与页面截图",
+        "screenshot_assets": "assets 的图片子集；按字节区分原图与页面截图"
+      },
+      "original": "JSON 布尔值；true 自身不证明原图",
+      "required": [
+        "candidate_id",
+        "platform",
+        "shop",
+        "kind",
+        "scope",
+        "observed_at",
+        "url",
+        "excerpt",
+        "assets",
+        "fields",
+        "original"
+      ],
+      "rule_gate": "已选候选，本渠道规则/商品说明/直播、活动期，附本地文字/PDF原文或明确标注的截图；不推断 SKU 可用",
+      "scope": [
+        "product_page",
+        "brand_page",
+        "rule_page",
+        "checkout",
+        "live"
+      ],
+      "type": "对象列表"
+    },
+    "paths": "清单 FILE 相对命令工作目录；image/assets 及两类附件角色相对 --run 或用批次内绝对路径；禁跨批次、符号链接、..",
+    "report_api": "同目录 report.py: write_report(path: pathlib.Path, data: dict)；entries.assets 为绝对本地路径",
+    "run": {
+      "formal": {
+        "channels": [
+          "抖音",
+          "天猫",
+          "淘宝",
+          "京东"
+        ],
+        "competitors": [
+          "欧莱雅",
+          "海洋至尊",
+          "碧欧泉",
+          "百雀羚",
+          "朗仕",
+          "韩束",
+          "理肤泉"
+        ],
+        "products": [
+          "冰川保湿抗皱",
+          "冰川露",
+          "喷喷乳",
+          "控油洁面"
+        ]
+      },
+      "pilot": {
+        "channels": [
+          "天猫",
+          "抖音"
+        ],
+        "competitors": [
+          "欧莱雅"
+        ],
+        "products": [
+          "控油洁面"
+        ]
+      },
+      "start": "新建或续用同一模式的空/已初始化目录；--year 默认上海当前年，续跑沿用建档年"
+    },
+    "select": "select ID [...] --trial（仅试跑）或 --confirmed（仅正式）；每款本品最多一个 ID。另一次明确 --replace 可换款并保存历史",
+    "source_boundary": "离线；域名、字段、关联、文件格式/像素可校验，原图内容、SKU 对应、页面真伪和授权由导入者根据截图核实"
+  }
+}

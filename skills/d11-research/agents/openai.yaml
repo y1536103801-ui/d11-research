@@ -1,0 +1,4 @@
+interface:
+  display_name: "大促调研助手"
+  short_description: "从品名找候选，核对渠道原图和优惠条件，生成带图的促销报告与缺口清单"
+  default_prompt: "用 $d11-research 从零整理双十一男护资料，先列候选让我认款。"
